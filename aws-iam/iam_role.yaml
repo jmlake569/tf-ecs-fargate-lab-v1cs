@@ -1,0 +1,39 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: IAM Role for ECS Fargate Terraform Deployment
+
+Resources:
+  ECSFargateRole:
+    Type: 'AWS::IAM::Role'
+    Properties: 
+      RoleName: 'ECSFargateTerraformRole'
+      AssumeRolePolicyDocument: 
+        Version: '2012-10-17'
+        Statement: 
+          - Effect: 'Allow'
+            Principal: 
+              Service: 
+                - 'ecs.amazonaws.com'
+                - 'ecs-tasks.amazonaws.com'
+            Action: 
+              - 'sts:AssumeRole'
+      Policies: 
+        - PolicyName: 'ECSFargatePolicy'
+          PolicyDocument: 
+            Version: '2012-10-17'
+            Statement: 
+              - Effect: 'Allow'
+                Action: 
+                  - 'ec2:DescribeInstances'
+                  - 'ecs:CreateCluster'
+                  - 'ecs:DeregisterContainerInstance'
+                  - 'ecs:DiscoverPollEndpoint'
+                  - 'ecs:Poll'
+                  - 'ecs:RegisterContainerInstance'
+                  - 'ecs:StartTelemetrySession'
+                  - 'ecs:SubmitTaskStateChange'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: 
+                  - 'arn:aws:ecs:*:*:cluster/*'
+                  - 'arn:aws:ec2:*:*:instance/*'
+                  - 'arn:aws:logs:*:*:log-group:/ecs/*:*'

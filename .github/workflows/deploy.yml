@@ -12,12 +12,12 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2=
-      
+
     - name: Assume IAM Role
       id: assume-role
       uses: aws-actions/configure-aws-credentials@v1
       with:
-        role-to-assume: ${{ secrets.ECS_FARGATE_ROLE_ARN }}
+        role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
         aws-region: us-east-1
 
     - name: Set up Terraform

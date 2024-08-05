@@ -1,23 +1,31 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: IAM Role for ECS Fargate Terraform Deployment
+Description: IAM Role for GitHub Actions
+
+Parameters:
+  RepositoryName:
+    Type: String
+    Description: Name of the GitHub repository
+  GitHubUsername:
+    Type: String
+    Description: GitHub username
 
 Resources:
-  ECSFargateRole:
+  GitHubActionsRole:
     Type: 'AWS::IAM::Role'
     Properties: 
-      RoleName: 'ECSFargateTerraformRole'
+      RoleName: !Sub '${GitHubUsername}-${RepositoryName}-GitHubActionsRole'
       AssumeRolePolicyDocument: 
         Version: '2012-10-17'
         Statement: 
           - Effect: 'Allow'
             Principal: 
-              Service: 
-                - 'ecs.amazonaws.com'
-                - 'ecs-tasks.amazonaws.com'
-            Action: 
-              - 'sts:AssumeRole'
+              Federated: 'arn:aws:iam::YOUR_ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com'
+            Action: 'sts:AssumeRoleWithWebIdentity'
+            Condition: 
+              StringEquals: 
+                'token.actions.githubusercontent.com:sub': !Sub 'repo:${GitHubUsername}/${RepositoryName}:ref:refs/heads/main'
       Policies: 
-        - PolicyName: 'ECSFargatePolicy'
+        - PolicyName: 'GitHubActionsPolicy'
           PolicyDocument: 
             Version: '2012-10-17'
             Statement: 
@@ -34,6 +42,9 @@ Resources:
                   - 'logs:CreateLogStream'
                   - 'logs:PutLogEvents'
                 Resource: 
-                  - 'arn:aws:ecs:*:*:cluster/*'
-                  - 'arn:aws:ec2:*:*:instance/*'
-                  - 'arn:aws:logs:*:*:log-group:/ecs/*:*'
+                  - '*'
+
+Outputs:
+  GitHubActionsRoleArn:
+    Description: "ARN of the GitHub Actions Role"
+    Value: !GetAtt GitHubActionsRole.Arn

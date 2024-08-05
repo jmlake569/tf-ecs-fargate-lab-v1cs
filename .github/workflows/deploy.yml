@@ -1,4 +1,4 @@
-name: Deploy Terraform
+name: Deploy to AWS
 
 on:
   push:
@@ -6,19 +6,24 @@ on:
       - main
 
 jobs:
-  terraform:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
-      
+    - name: Checkout code
+      uses: actions/checkout@v2
+
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v1.7.0
       with:
-        role-to-assume: ${{ secrets.AWS_GH_ROLE_ARN }}
+        role-to-assume: arn:aws:iam::123456789012:role/YourRoleName
         role-session-name: GitHub_to_AWS_via_FederatedOIDC
-        aws-region: ${{ env.AWS_DEFAULT_REGION }}
+        aws-region: us-east-1
+        audience: sts.amazonaws.com
+
+    - name: Deploy to AWS
+      run: |
+        # Your deployment commands here
 
     - name: Set up Terraform
       uses: hashicorp/setup-terraform@v1

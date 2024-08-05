@@ -9,6 +9,9 @@ jobs:
   terraform:
     runs-on: ubuntu-latest
 
+    env:
+      AWS_DEFAULT_REGION: us-east-1  # Set your desired AWS region here
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3

@@ -1,6 +1,10 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: 'The Boring Paper Co OIDC IAM Role for GitHub'
+Description: 'The Boring Paper Co Repo and OIDC IAM Role for GitHub'
 Parameters:
+  RepositoryNames:
+    Type: CommaDelimitedList
+    Description: "Comma-separated list of repository names"
+    Default: "frontend,backend,orders,terminal,lazymode"
   GitHubOrg:
     Description: Name of GitHub organization/user (case sensitive)
     Type: String
@@ -22,6 +26,32 @@ Conditions:
     - ""
 
 Resources:
+  # Create ECR Repositories
+  FrontendECR:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Select [0, !Ref RepositoryNames]
+
+  BackendECR:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Select [1, !Ref RepositoryNames]
+
+  OrdersECR:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Select [2, !Ref RepositoryNames]
+
+  TerminalECR:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Select [3, !Ref RepositoryNames]
+
+  LazymodeECR:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Select [4, !Ref RepositoryNames]
+  
   Role:
     Type: AWS::IAM::Role
     Properties:
@@ -49,8 +79,10 @@ Resources:
       ClientIdList: 
         - sts.amazonaws.com
       ThumbprintList:
-        - 6938fd4d98bab03faadb97b34396831e3780aea1
+        - ffffffffffffffffffffffffffffffffffffffff
 
 Outputs:
   GithubRole:
     Value: !GetAtt Role.Arn
+  ECRBaseUrl:
+    Value: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com"

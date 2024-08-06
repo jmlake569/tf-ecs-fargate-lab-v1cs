@@ -44,46 +44,83 @@ jobs:
             exit 1
           fi
           echo "Successfully pulled ECS task definitions"
-          cat task_definitions_list.json
-
-          - name: Compare and Patch ECS Task Definitions
-          run: |
+          cat task_definitions_list.json          
+      - name: Compare and Patch ECS Task Definitions
+        run: |
             echo "Comparing and patching ECS task definitions..."
             echo "Contents of desired_task_definitions.txt:"
             cat desired_task_definitions.txt
             echo "Contents of task_definitions_list.json:"
             cat task_definitions_list.json
-        
+
             while IFS= read -r TASK_DEF; do
-              echo "Processing task definition: $TASK_DEF"
-              if grep -q "$TASK_DEF" task_definitions_list.json; then
+            echo "Processing task definition: $TASK_DEF"
+            if grep -q "$TASK_DEF" task_definitions_list.json; then
                 echo "$TASK_DEF exists, pulling and patching..."
                 aws ecs describe-task-definition --task-definition $TASK_DEF > current_task_definition.json
                 if [ $? -ne 0 ]; then
-                  echo "Error: Failed to describe task definition $TASK_DEF"
-                  exit 1
+                echo "Error: Failed to describe task definition $TASK_DEF"
+                exit 1
                 fi
                 echo "Current task definition:"
                 cat current_task_definition.json
-                docker run -ti \
-                  -v /home/runner/work/tf-ecs-fargate-lab-v1cs/tf-ecs-fargate-lab-v1cs/current_task_definition.json:/mnt/input/current_task_definition.json \
-                  -v /home/runner/work/tf-ecs-fargate-lab-v1cs/tf-ecs-fargate-lab-v1cs/patched_task_definition.json:/mnt/output/patched_task_definition.json \
-                  trendmicrocloudone/ecs-taskdef-patcher:2.3.44 \
-                  -i /mnt/input/current_task_definition.json \
-                  -o /mnt/output/patched_task_definition.json
+                docker run -v /home/runner/work/tf-ecs-fargate-lab-v1cs/tf-ecs-fargate-lab-v1cs/current_task_definition.json:/mnt/input/current_task_definition.json \
+                        -v /home/runner/work/tf-ecs-fargate-lab-v1cs/tf-ecs-fargate-lab-v1cs/patched_task_definition.json:/mnt/output/patched_task_definition.json \
+                        trendmicrocloudone/ecs-taskdef-patcher:2.3.44 \
+                        -i /mnt/input/current_task_definition.json \
+                        -o /mnt/output/patched_task_definition.json
                 if [ $? -ne 0 ]; then
-                  echo "Error: Failed to patch task definition $TASK_DEF"
-                  exit 1
+                echo "Error: Failed to patch task definition $TASK_DEF"
+                exit 1
                 fi
                 echo "Patched task definition:"
                 cat /home/runner/work/tf-ecs-fargate-lab-v1cs/tf-ecs-fargate-lab-v1cs/patched_task_definition.json
                 cp /home/runner/work/tf-ecs-fargate-lab-v1cs/tf-ecs-fargate-lab-v1cs/patched_task_definition.json path/to/terraform/configuration/$TASK_DEF.json
                 if [ $? -ne 0 ]; then
-                  echo "Error: Failed to copy patched task definition $TASK_DEF"
-                  exit 1
+                echo "Error: Failed to copy patched task definition $TASK_DEF"
+                exit 1
                 fi
-              else
+            else
                 echo "$TASK_DEF does not exist, skipping..."
-              fi
+            fi
             done < desired_task_definitions.txt
-            echo "Successfully compared and patched ECS task definitions"
+            echo "Successfully compared and patched ECS task definitions"    - name: Compare and Patch ECS Task Definitions
+            run: |
+                echo "Comparing and patching ECS task definitions..."
+                echo "Contents of desired_task_definitions.txt:"
+                cat desired_task_definitions.txt
+                echo "Contents of task_definitions_list.json:"
+                cat task_definitions_list.json
+            
+                while IFS= read -r TASK_DEF; do
+                echo "Processing task definition: $TASK_DEF"
+                if grep -q "$TASK_DEF" task_definitions_list.json; then
+                    echo "$TASK_DEF exists, pulling and patching..."
+                    aws ecs describe-task-definition --task-definition $TASK_DEF > current_task_definition.json
+                    if [ $? -ne 0 ]; then
+                    echo "Error: Failed to describe task definition $TASK_DEF"
+                    exit 1
+                    fi
+                    echo "Current task definition:"
+                    cat current_task_definition.json
+                    docker run -v /home/runner/work/tf-ecs-fargate-lab-v1cs/tf-ecs-fargate-lab-v1cs/current_task_definition.json:/mnt/input/current_task_definition.json \
+                            -v /home/runner/work/tf-ecs-fargate-lab-v1cs/tf-ecs-fargate-lab-v1cs/patched_task_definition.json:/mnt/output/patched_task_definition.json \
+                            trendmicrocloudone/ecs-taskdef-patcher:2.3.44 \
+                            -i /mnt/input/current_task_definition.json \
+                            -o /mnt/output/patched_task_definition.json
+                    if [ $? -ne 0 ]; then
+                    echo "Error: Failed to patch task definition $TASK_DEF"
+                    exit 1
+                    fi
+                    echo "Patched task definition:"
+                    cat /home/runner/work/tf-ecs-fargate-lab-v1cs/tf-ecs-fargate-lab-v1cs/patched_task_definition.json
+                    cp /home/runner/work/tf-ecs-fargate-lab-v1cs/tf-ecs-fargate-lab-v1cs/patched_task_definition.json path/to/terraform/configuration/$TASK_DEF.json
+                    if [ $? -ne 0 ]; then
+                    echo "Error: Failed to copy patched task definition $TASK_DEF"
+                    exit 1
+                    fi
+                else
+                    echo "$TASK_DEF does not exist, skipping..."
+                fi
+                done < desired_task_definitions.txt
+                echo "Successfully compared and patched ECS task definitions"

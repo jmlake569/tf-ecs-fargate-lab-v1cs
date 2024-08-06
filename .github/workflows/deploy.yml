@@ -1,8 +1,6 @@
 name: Infrastructure Deployment
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
 env:
   AWS_DEFAULT_REGION: us-east-1

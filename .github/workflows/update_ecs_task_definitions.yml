@@ -1,0 +1,52 @@
+name: Update ECS Task Definitions
+
+on:
+  workflow_dispatch:
+env:
+  AWS_DEFAULT_REGION: us-east-1
+
+permissions:
+  id-token: write   # This is required for requesting the JWT
+  contents: read    # This is required for actions/checkout
+
+jobs:
+  update-ecs-task-definitions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1.7.0
+        with:
+          role-to-assume: ${{ secrets.AWS_GH_ROLE_ARN }}
+          role-session-name: GitHub_to_AWS_via_FederatedOIDC
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+
+      - name: Pull ECS Task Definitions
+        run: |
+          aws ecs list-task-definitions > task_definitions_list.json
+
+      - name: Compare and Patch ECS Task Definitions
+        run: |
+          while IFS= read -r TASK_DEF; do
+            if grep -q "$TASK_DEF" task_definitions_list.json; then
+              echo "$TASK_DEF exists, pulling and patching..."
+              aws ecs describe-task-definition --task-definition $TASK_DEF > current_task_definition.json
+              docker run -ti \
+                -v ${{ github.workspace }}/current_task_definition.json:/mnt/input/current_task_definition.json \
+                -v ${{ github.workspace }}/patched_task_definition.json:/mnt/output/patched_task_definition.json \
+                trendmicrocloudone/ecs-taskdef-patcher:x.y.z \
+                -i /mnt/input/current_task_definition.json \
+                -o /mnt/output/patched_task_definition.json
+              cp ${{ github.workspace }}/patched_task_definition.json path/to/terraform/configuration/$TASK_DEF.json
+            else
+              echo "$TASK_DEF does not exist, skipping..."
+            fi
+          done < desired_task_definitions.txt
+
+      - name: Inject Patched Task Definitions into Terraform
+        run: |
+          while IFS= read -r TASK_DEF; do
+            cp path/to/terraform/configuration/$TASK_DEF.json path/to/terraform/configuration/
+          done < desired_task_definitions.txt

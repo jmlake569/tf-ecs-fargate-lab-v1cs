@@ -25,28 +25,66 @@ jobs:
 
       - name: Pull ECS Task Definitions
         run: |
+          echo "Pulling ECS task definitions..."
           aws ecs list-task-definitions > task_definitions_list.json
+          if [ $? -ne 0 ]; then
+            echo "Error: Failed to pull ECS task definitions"
+            exit 1
+          fi
+          echo "Successfully pulled ECS task definitions"
 
       - name: Compare and Patch ECS Task Definitions
         run: |
+          echo "Comparing and patching ECS task definitions..."
           while IFS= read -r TASK_DEF; do
             if grep -q "$TASK_DEF" task_definitions_list.json; then
               echo "$TASK_DEF exists, pulling and patching..."
               aws ecs describe-task-definition --task-definition $TASK_DEF > current_task_definition.json
+              if [ $? -ne 0 ]; then
+                echo "Error: Failed to describe task definition $TASK_DEF"
+                exit 1
+              fi
               docker run -ti \
-                -v ${{ github.workspace }}/current_task_definition.json:/mnt/input/current_task_definition.json \
-                -v ${{ github.workspace }}/patched_task_definition.json:/mnt/output/patched_task_definition.json \
-                trendmicrocloudone/ecs-taskdef-patcher:x.y.z \
+                -v ${{ github.workspace }}:mnt/input/current_task_definition.json \
+                -v ${{ github.workspace }}:/mnt/output/patched_task_definition.json \
+                trendmicrocloudone/ecs-taskdef-patcher:2.3.44 \
                 -i /mnt/input/current_task_definition.json \
                 -o /mnt/output/patched_task_definition.json
+              if [ $? -ne 0 ]; then
+                echo "Error: Failed to patch task definition $TASK_DEF"
+                exit 1
+              fi
               cp ${{ github.workspace }}/patched_task_definition.json path/to/terraform/configuration/$TASK_DEF.json
+              if [ $? -ne 0 ]; then
+                echo "Error: Failed to copy patched task definition $TASK_DEF"
+                exit 1
+              fi
             else
               echo "$TASK_DEF does not exist, skipping..."
             fi
           done < desired_task_definitions.txt
+          echo "Successfully compared and patched ECS task definitions"
 
       - name: Inject Patched Task Definitions into Terraform
         run: |
+          echo "Injecting patched task definitions into Terraform..."
           while IFS= read -r TASK_DEF; do
             cp path/to/terraform/configuration/$TASK_DEF.json path/to/terraform/configuration/
+            if [ $? -ne 0 ]; then
+              echo "Error: Failed to inject patched task definition $TASK_DEF into Terraform"
+              exit 1
+            fi
           done < desired_task_definitions.txt
+          echo "Successfully injected patched task definitions into Terraform"
+
+      - name: Register Updated Task Definitions
+        run: |
+          echo "Registering updated task definitions..."
+          while IFS= read -r TASK_DEF; do
+            aws ecs register-task-definition --cli-input-json file://path/to/terraform/configuration/$TASK_DEF.json
+            if [ $? -ne 0 ]; then
+              echo "Error: Failed to register task definition $TASK_DEF"
+              exit 1
+            fi
+          done < desired_task_definitions.txt
+          echo "Successfully registered updated task definitions"

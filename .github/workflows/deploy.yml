@@ -19,7 +19,7 @@ jobs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v1.7.0
       with:
-        role-to-assume: ${{ secrets.AWS_GH_ROLE_ARN }}
+        role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
         role-session-name: GitHub_to_AWS_via_FederatedOIDC
         aws-region: ${{ env.AWS_DEFAULT_REGION }}
         audience: sts.amazonaws.com
@@ -41,3 +41,7 @@ jobs:
     - name: Terraform Apply
       if: github.ref == 'refs/heads/main'
       run: terraform apply -auto-approve tfplan
+
+    - name: Cleanup
+      if: failure()
+      run: echo "Cleaning up after failure"

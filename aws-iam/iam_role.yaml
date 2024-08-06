@@ -1,56 +1,51 @@
-AWSTemplateFormatVersion: "2010-09-09"
-Description: 'The Boring Paper Co OIDC IAM Role for GitHub'
-Parameters:
-  GitHubOrg:
-    Description: Name of GitHub organization/user (case sensitive)
-    Type: String
-  RepositoryName:
-    Description: Name of GitHub repository (case sensitive)
-    Type: String
-  OIDCProviderArn:
-    Description: Arn for the GitHub OIDC Provider. Just Ignore.
-    Default: ""
-    Type: String
-  OIDCAudience:
-    Description: Audience supplied to configure-aws-credentials.
-    Default: "sts.amazonaws.com"
-    Type: String
+AWSTemplateFormatVersion: '2010-09-09'
+Description: IAM Role for GitHub Actions
 
-Conditions:
-  CreateOIDCProvider: !Equals 
-    - !Ref OIDCProviderArn
-    - ""
+Parameters:
+  RoleName:
+    Type: String
+    Description: The name of the IAM role
+  GitHubOrg:
+    Type: String
+    Description: The GitHub organization or user
+  GitHubRepo:
+    Type: String
+    Description: The GitHub repository name
+  AWSAccountId:
+    Type: String
+    Description: The AWS account ID
 
 Resources:
-  Role:
+  GitHubActionsRole:
     Type: AWS::IAM::Role
     Properties:
-      ManagedPolicyArns: [arn:aws:iam::aws:policy/AdministratorAccess]
+      RoleName: !Ref RoleName
       AssumeRolePolicyDocument:
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
-            Action: sts:AssumeRoleWithWebIdentity
             Principal:
-              Federated: !If 
-                - CreateOIDCProvider
-                - !Ref GithubOidc
-                - !Ref OIDCProviderArn
+              Federated: !Sub arn:aws:iam::${AWSAccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
             Condition:
               StringEquals:
-                token.actions.githubusercontent.com:aud: !Ref OIDCAudience
-              StringLike:
-                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrg}/${RepositoryName}:*
-
-  GithubOidc:
-    Type: AWS::IAM::OIDCProvider
-    Condition: CreateOIDCProvider
-    Properties:
-      Url: https://token.actions.githubusercontent.com
-      ClientIdList: 
-        - sts.amazonaws.com
-      ThumbprintList:
-        - 6938fd4d98bab03faadb97b34396831e3780aea1
-
-Outputs:
-  GithubRole:
-    Value: !GetAtt Role.Arn
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrg}/${GitHubRepo}:*
+      Policies:
+        - PolicyName: GitHubActionsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecs:DescribeTaskDefinition
+                  - ecs:UpdateService
+                  - ecs:DescribeServices
+                  - ecs:ListTasks
+                  - ecs:DescribeTasks
+                  - ecs:RunTask
+                  - ecs:StopTask
+                  - ecs:RegisterTaskDefinition
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"

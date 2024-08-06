@@ -1,47 +1,35 @@
-name: Deploy Terraform
+name: Infrastructure Deployment
 
-on:
-  push:
-    branches:
-      - main
+on: [push]
 
 jobs:
-  terraform:
+  build:
     runs-on: ubuntu-latest
-
-    env:
-      AWS_DEFAULT_REGION: us-east-1  # Set your desired AWS region here
-
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
-      
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v1.7.0
-      with:
-        role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
-        role-session-name: GitHub_to_AWS_via_FederatedOIDC
-        aws-region: ${{ env.AWS_DEFAULT_REGION }}
-        audience: sts.amazonaws.com
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
-    - name: Set up Terraform
-      uses: hashicorp/setup-terraform@v1
-      with:
-        terraform_version: 1.0.0
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1.7.0
+        with:
+          role-to-assume: ${{ secrets.AWS_GH_ROLE_ARN }}
+          role-session-name: GitHub_to_AWS_via_FederatedOIDC
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
 
-    - name: Terraform Init
-      run: terraform init
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform-version: latest
 
-    - name: Terraform Validate
-      run: terraform validate
+      - name: Init Terraform
+        run: terraform init
 
-    - name: Terraform Plan
-      run: terraform plan -out=tfplan
+      - name: Validate Terraform
+        run: terraform validate
 
-    - name: Terraform Apply
-      if: github.ref == 'refs/heads/main'
-      run: terraform apply -auto-approve tfplan
+      - name: Plan Terraform
+        run: terraform plan -out=tfplan
 
-    - name: Cleanup
-      if: failure()
-      run: echo "Cleaning up after failure"
+      - name: Apply Terraform
+        if: github.ref == 'refs/heads/main'
+        run: terraform apply -auto-approve tfplan

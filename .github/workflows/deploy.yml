@@ -1,7 +1,16 @@
 name: Infrastructure Deployment
 
-on: [push]
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+env:
+  aws_DEFAULT_REGION: us-east-1
 
+permissions:
+    id-token: write   # This is required for requesting the JWT
+    contents: read    # This is required for actions/checkout
+    
 jobs:
   build:
     runs-on: ubuntu-latest

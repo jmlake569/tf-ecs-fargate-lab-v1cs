@@ -1,1 +1,1 @@
-arn:aws:ecs:us-east-1:851725486855:task-definition/ecs-fargate-trend-demo-nginx:10
+ecs-fargate-trend-demo-nginx

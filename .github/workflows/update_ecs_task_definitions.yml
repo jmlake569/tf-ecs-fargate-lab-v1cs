@@ -13,11 +13,27 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v2
 
+    - name: Check for required files
+      run: |
+        if [ ! -f ./desired_task_definitions.txt ]; then
+          echo "Error: desired_task_definitions.txt not found"
+          exit 1
+        fi
+
     - name: Display contents of desired_task_definitions.txt
       run: cat ./desired_task_definitions.txt
 
+    - name: Retrieve current task definitions from AWS
+      run: |
+        aws ecs list-task-definitions > task_definitions_list.json
+        if [ $? -ne 0 ]; then
+          echo "Error: Failed to retrieve task definitions from AWS"
+          exit 1
+        fi
+
     - name: Process task definitions
       run: |
+        > task_definitions_to_process.txt
         while IFS= read -r TASK_DEF; do
           echo "Processing task definition: $TASK_DEF"
           if grep -q "$TASK_DEF" ./task_definitions_list.json; then

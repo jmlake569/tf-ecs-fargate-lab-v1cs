@@ -13,23 +13,8 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v2
 
-    - name: Check for required files
-      run: |
-        if [ ! -f ./desired_task_definitions.txt ]; then
-          echo "Error: desired_task_definitions.txt not found"
-          exit 1
-        fi
-
-        if [ ! -f ./task_definitions_list.json ]; then
-          echo "Error: task_definitions_list.json not found"
-          exit 1
-        fi
-
     - name: Display contents of desired_task_definitions.txt
       run: cat ./desired_task_definitions.txt
-
-    - name: Display contents of task_definitions_list.json
-      run: cat ./task_definitions_list.json
 
     - name: Process task definitions
       run: |

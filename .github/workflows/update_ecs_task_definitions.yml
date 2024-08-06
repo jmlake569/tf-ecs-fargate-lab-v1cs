@@ -46,28 +46,17 @@ jobs:
       - name: Display contents of desired_task_definitions.txt
         run: cat ./desired_task_definitions.txt
 
-      - name: Retrieve current task definitions from AWS
-        run: |
-          aws ecs list-task-definitions > task_definitions_list.json
-          if [ $? -ne 0 ]; then
-            echo "Error: Failed to retrieve task definitions from AWS"
-            exit 1
-          fi
-
       - name: Process task definitions
         run: |
           > task_definitions_to_process.txt
           while IFS= read -r TASK_DEF; do
             echo "Processing task definition: $TASK_DEF"
-            if grep -q "$TASK_DEF" ./task_definitions_list.json; then
-              echo "$TASK_DEF exists, pulling and patching..."
-              echo $TASK_DEF >> task_definitions_to_process.txt
-            else
-              echo "$TASK_DEF does not exist, skipping..."
-            fi
+            echo $TASK_DEF >> task_definitions_to_process.txt
           done < ./desired_task_definitions.txt
+          echo "Task definitions to process:"
+          cat task_definitions_to_process.txt
 
-      - name: Describe task definitions
+      - name: Describe and patch task definitions
         run: |
           while IFS= read -r TASK_DEF; do
             aws ecs describe-task-definition --task-definition $TASK_DEF > current_task_definition.json
@@ -77,11 +66,7 @@ jobs:
             fi
             echo "Current task definition:"
             cat current_task_definition.json
-          done < task_definitions_to_process.txt
 
-      - name: Patch task definitions
-        run: |
-          while IFS= read -r TASK_DEF; do
             docker run -v $(pwd)/current_task_definition.json:/mnt/input/current_task_definition.json \
                        -v $(pwd)/patched_task_definition.json:/mnt/output/patched_task_definition.json \
                        trendmicrocloudone/ecs-taskdef-patcher:2.3.44 \

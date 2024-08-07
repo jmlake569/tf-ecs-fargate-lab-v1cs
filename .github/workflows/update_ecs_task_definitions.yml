@@ -60,6 +60,6 @@ jobs:
           AWS_REGION: us-east-1
         run: |
           while IFS= read -r TASK_DEF; do
-            NEW_TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://$(pwd)/path/to/terraform/configuration/$(basename "$TASK_DEF").json | jq -r '.taskDefinition.taskDefinitionArn')
-            echo "New task definition ARN: $NEW_TASK_DEF_ARN"
+            NEW_TASK_DEF=$(aws ecs register-task-definition --cli-input-json file://path/to/terraform/configuration/$(basename "$TASK_DEF").json)
+            echo "New task definition ARN: $NEW_TASK_DEF"
           done < task_definitions_list.json

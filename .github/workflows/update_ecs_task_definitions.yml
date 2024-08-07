@@ -36,87 +36,30 @@ jobs:
           role-session-name: GitHub_to_AWS_via_FederatedOIDC
           aws-region: ${{ env.AWS_DEFAULT_REGION }}
 
-      - name: Install jq
-        run: sudo apt-get install -y jq
-
-      - name: List and filter ECS task definitions
+      - name: Fetch current task definitions
         run: |
-          #!/bin/bash
-          set -e  # Exit immediately if a command exits with a non-zero status
-
-          # List of keywords to filter task definitions
-          KEYWORDS=("ecs-fargate-trend-demo-nginx")
-
-          # List all ECS task definitions
-          echo "Listing all ECS task definitions..."
-          TASK_DEFINITIONS=$(aws ecs list-task-definitions)
-
-          # Display the raw JSON output
-          echo "Raw JSON output:"
-          echo $TASK_DEFINITIONS
-
-          # Pretty print the JSON output using jq
-          echo "Pretty printed JSON output:"
-          echo $TASK_DEFINITIONS | jq .
-
-          # Filter task definitions based on keywords
-          echo "Filtering task definitions..."
-          FILTERED_TASK_DEFINITIONS=$(echo $TASK_DEFINITIONS | jq -r --argjson keywords "$(printf '%s\n' "${KEYWORDS[@]}" | jq -R . | jq -s .)" '.taskDefinitionArns[] | select(. as $arn | $keywords | any(. as $keyword | $arn | contains($keyword)))')
-
-          # Display the filtered task definitions
-          echo "Filtered task definitions:"
-          echo $FILTERED_TASK_DEFINITIONS
-
-          # Save filtered task definitions to a file
-          echo $FILTERED_TASK_DEFINITIONS > desired_task_definitions.txt
-
-      - name: Check for required files
-        run: |
-          if [ ! -f ./desired_task_definitions.txt ]; then
-            echo "Error: desired_task_definitions.txt not found"
-            exit 1
-          fi
-
-      - name: Display contents of desired_task_definitions.txt
-        run: cat ./desired_task_definitions.txt
-
-      - name: Process task definitions
-        run: |
-          #!/bin/bash
-          set -e  # Exit immediately if a command exits with a non-zero status
-          > task_definitions_to_process.txt
-          while IFS= read -r TASK_DEF; do
-            echo "Processing task definition: $TASK_DEF"
-            echo $TASK_DEF >> task_definitions_to_process.txt
-          done < ./desired_task_definitions.txt
-          echo "Task definitions to process:"
-          cat task_definitions_to_process.txt
+          aws ecs list-task-definitions --cli-input-json file://desired_task_definitions.txt > task_definitions_list.json
 
       - name: Describe and patch task definitions
+        env:
+          AWS_REGION: us-east-1
         run: |
-          #!/bin/bash
-          set -e  # Exit immediately if a command exits with a non-zero status
           while IFS= read -r TASK_DEF; do
             echo "Describing task definition: $TASK_DEF"
             aws ecs describe-task-definition --task-definition "$TASK_DEF" > current_task_definition.json
-            echo "Current task definition:"
-            cat current_task_definition.json
-
-            docker run -v $(pwd):/mnt/input \
-                       -v $(pwd):/mnt/output \
-                       trendmicrocloudone/ecs-taskdef-patcher:2.3.44 \
-                       -i /mnt/input/current_task_definition.json \
+            docker run -v $(pwd):/mnt/input \\\\
+                       -v $(pwd):/mnt/output \\\\
+                       trendmicrocloudone/ecs-taskdef-patcher:2.3.44 \\\\
+                       -i /mnt/input/current_task_definition.json \\\\
                        -o /mnt/output/patched_task_definition.json
-            echo "Patched task definition:"
-            cat $(pwd)/patched_task_definition.json
             cp $(pwd)/patched_task_definition.json path/to/terraform/configuration/$(basename "$TASK_DEF").json
-          done < task_definitions_to_process.txt
+          done < task_definitions_list.json
 
       - name: Register new task definitions
+        env:
+          AWS_REGION: us-east-1
         run: |
-          #!/bin/bash
-          set -e  # Exit immediately if a command exits with a non-zero status
           while IFS= read -r TASK_DEF; do
             NEW_TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://$(pwd)/path/to/terraform/configuration/$(basename "$TASK_DEF").json | jq -r '.taskDefinition.taskDefinitionArn')
             echo "New task definition ARN: $NEW_TASK_DEF_ARN"
-          done < task_definitions_to_process.txt
+          done < task_definitions_list.json

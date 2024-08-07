@@ -1,1 +1,1 @@
-ecs-fargate-trend-demo-nginx
+ecs-fargate-trend-demo-nginx:10

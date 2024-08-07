@@ -103,7 +103,7 @@ jobs:
             cat current_task_definition.json
 
             docker run -v $(pwd):/mnt/input \
-                       -v $(pwd)/:/mnt/output \ 
+                       -v $(pwd):/mnt/output \
                        trendmicrocloudone/ecs-taskdef-patcher:2.3.44 \
                        -i /mnt/input/current_task_definition.json \
                        -o /mnt/output/patched_task_definition.json

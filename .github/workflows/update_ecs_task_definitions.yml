@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Set up AWS CLI
-        uses: aws-actions/setup-aws-cli@v2
+        uses: aws-actions/setup-cli@v1
         with:
           version: 2.x
 

@@ -94,22 +94,23 @@ jobs:
 
       - name: Describe and patch task definitions
         run: |
-          #!/bin/bash
-          set -e  # Exit immediately if a command exits with a non-zero status
-          while IFS= read -r TASK_DEF; do
-            aws ecs describe-task-definition --task-definition $TASK_DEF > current_task_definition.json
-            echo "Current task definition:"
-            cat current_task_definition.json
-
-            docker run -v $(pwd)/current_task_definition.json:/mnt/input/current_task_definition.json \
-                       -v $(pwd)/patched_task_definition.json:/mnt/output/patched_task_definition.json \
-                       trendmicrocloudone/ecs-taskdef-patcher:2.3.44 \
-                       -i /mnt/input/current_task_definition.json \
-                       -o /mnt/output/patched_task_definition.json
-            echo "Patched task definition:"
-            cat $(pwd)/patched_task_definition.json
-            cp $(pwd)/patched_task_definition.json path/to/terraform/configuration/$TASK_DEF.json
-          done < task_definitions_to_process.txt
+            #!/bin/bash
+            set -e  # Exit immediately if a command exits with a non-zero status
+            while IFS= read -r TASK_DEF; do
+              echo "Describing task definition: $TASK_DEF"
+              aws ecs describe-task-definition --task-definition $TASK_DEF > current_task_definition.json
+              echo "Current task definition:"
+              cat current_task_definition.json
+  
+              docker run -v $(pwd)/current_task_definition.json:/mnt/input/current_task_definition.json \
+                         -v $(pwd)/patched_task_definition.json:/mnt/output/patched_task_definition.json \
+                         trendmicrocloudone/ecs-taskdef-patcher:2.3.44 \
+                         -i /mnt/input/current_task_definition.json \
+                         -o /mnt/output/patched_task_definition.json
+              echo "Patched task definition:"
+              cat $(pwd)/patched_task_definition.json
+              cp $(pwd)/patched_task_definition.json path/to/terraform/configuration/$(basename $TASK_DEF).json
+            done < task_definitions_to_process.txt
 
       - name: Register new task definitions
         run: |

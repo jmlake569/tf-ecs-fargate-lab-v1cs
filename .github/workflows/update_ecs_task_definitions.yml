@@ -17,10 +17,17 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Set up AWS CLI
-        uses: aws-actions/setup-cli@v1
-        with:
-          version: 2.x
+      - name: Install AWS CLI
+        run: |
+          echo "Installing AWS CLI..."
+          sudo apt-get update
+          sudo apt-get install -y awscli
+          aws --version
+          if [ $? -ne 0 ]; then
+            echo "Error: AWS CLI installation failed"
+            exit 1
+          fi
+          echo "AWS CLI installed successfully"
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1.7.0

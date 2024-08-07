@@ -98,7 +98,7 @@ jobs:
           set -e  # Exit immediately if a command exits with a non-zero status
           while IFS= read -r TASK_DEF; do
             echo "Describing task definition: $TASK_DEF"
-            aws ecs describe-task-definition --task-definition $TASK_DEF > current_task_definition.json
+            aws ecs describe-task-definition --task-definition "$TASK_DEF" > current_task_definition.json
             echo "Current task definition:"
             cat current_task_definition.json
 
@@ -109,7 +109,7 @@ jobs:
                        -o /mnt/output/patched_task_definition.json
             echo "Patched task definition:"
             cat $(pwd)/patched_task_definition.json
-            cp $(pwd)/patched_task_definition.json path/to/terraform/configuration/$(basename $TASK_DEF).json
+            cp $(pwd)/patched_task_definition.json path/to/terraform/configuration/$(basename "$TASK_DEF").json
           done < task_definitions_to_process.txt
 
       - name: Register new task definitions
@@ -117,6 +117,6 @@ jobs:
           #!/bin/bash
           set -e  # Exit immediately if a command exits with a non-zero status
           while IFS= read -r TASK_DEF; do
-            NEW_TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://$(pwd)/path/to/terraform/configuration/$(basename $TASK_DEF).json | jq -r '.taskDefinition.taskDefinitionArn')
+            NEW_TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://$(pwd)/path/to/terraform/configuration/$(basename "$TASK_DEF").json | jq -r '.taskDefinition.taskDefinitionArn')
             echo "New task definition ARN: $NEW_TASK_DEF_ARN"
           done < task_definitions_to_process.txt

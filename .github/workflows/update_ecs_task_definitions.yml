@@ -17,17 +17,10 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Install AWS CLI
-        run: |
-          echo "Installing AWS CLI..."
-          sudo apt-get update
-          sudo apt-get install -y awscli
-          aws --version
-          if [ $? -ne 0 ]; then
-            echo "Error: AWS CLI installation failed"
-            exit 1
-          fi
-          echo "AWS CLI installed successfully"
+      - name: Set up AWS CLI
+        uses: aws-actions/setup-aws-cli@v2
+        with:
+          version: 2.x
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1.7.0
@@ -42,7 +35,6 @@ jobs:
       - name: List and filter ECS task definitions
         run: |
           #!/bin/bash
-
           set -e  # Exit immediately if a command exits with a non-zero status
 
           # List of keywords to filter task definitions
@@ -51,12 +43,6 @@ jobs:
           # List all ECS task definitions
           echo "Listing all ECS task definitions..."
           TASK_DEFINITIONS=$(aws ecs list-task-definitions)
-
-          # Check if the command was successful
-          if [ $? -ne 0 ]; then
-            echo "Error: Failed to list ECS task definitions"
-            exit 1
-          fi
 
           # Display the raw JSON output
           echo "Raw JSON output:"
@@ -89,6 +75,8 @@ jobs:
 
       - name: Process task definitions
         run: |
+          #!/bin/bash
+          set -e  # Exit immediately if a command exits with a non-zero status
           > task_definitions_to_process.txt
           while IFS= read -r TASK_DEF; do
             echo "Processing task definition: $TASK_DEF"
@@ -99,12 +87,10 @@ jobs:
 
       - name: Describe and patch task definitions
         run: |
+          #!/bin/bash
+          set -e  # Exit immediately if a command exits with a non-zero status
           while IFS= read -r TASK_DEF; do
             aws ecs describe-task-definition --task-definition $TASK_DEF > current_task_definition.json
-            if [ $? -ne 0 ]; then
-              echo "Error: Failed to describe task definition $TASK_DEF"
-              exit 1
-            fi
             echo "Current task definition:"
             cat current_task_definition.json
 
@@ -113,26 +99,16 @@ jobs:
                        trendmicrocloudone/ecs-taskdef-patcher:2.3.44 \
                        -i /mnt/input/current_task_definition.json \
                        -o /mnt/output/patched_task_definition.json
-            if [ $? -ne 0 ]; then
-              echo "Error: Failed to patch task definition $TASK_DEF"
-              exit 1
-            fi
             echo "Patched task definition:"
             cat $(pwd)/patched_task_definition.json
             cp $(pwd)/patched_task_definition.json path/to/terraform/configuration/$TASK_DEF.json
-            if [ $? -ne 0 ]; then
-              echo "Error: Failed to copy patched task definition $TASK_DEF"
-              exit 1
-            fi
           done < task_definitions_to_process.txt
 
       - name: Register new task definitions
         run: |
+          #!/bin/bash
+          set -e  # Exit immediately if a command exits with a non-zero status
           while IFS= read -r TASK_DEF; do
             NEW_TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://$(pwd)/path/to/terraform/configuration/$TASK_DEF.json | jq -r '.taskDefinition.taskDefinitionArn')
-            if [ $? -ne 0 ]; then
-              echo "Error: Failed to register new task definition $TASK_DEF"
-              exit 1
-            fi
             echo "New task definition ARN: $NEW_TASK_DEF_ARN"
           done < task_definitions_to_process.txt

@@ -84,7 +84,7 @@ jobs:
               exit 1
             fi
 
-            # Ensure the 'family' field is retained and the 'essential' field is set to true in the patched file
+            # Ensure the 'family' field is retained and essential fields are set correctly
             jq --arg family "$family_name" \
                '.family = $family | .containerDefinitions[] |= (.essential = true)' \
                "$output_file" > "patched_${family_name}.json"
@@ -93,5 +93,6 @@ jobs:
       - name: Register patched task definitions
         run: |
           for file in patched_*.json; do
+            echo "Registering $file..."
             aws ecs register-task-definition --cli-input-json file://$file
           done

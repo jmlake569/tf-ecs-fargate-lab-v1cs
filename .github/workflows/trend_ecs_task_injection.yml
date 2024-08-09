@@ -2,6 +2,11 @@ name: Update ECS Task Definitions
 
 on:
   workflow_dispatch:
+    inputs:
+      filter_keywords:
+        description: "Comma-separated list of keywords to filter task definitions"
+        required: true
+        default: "keyword1,keyword2,keyword3"
 
 env:
   AWS_DEFAULT_REGION: us-east-1
@@ -11,23 +16,12 @@ permissions:
   contents: read    # This is required for actions/checkout
 
 jobs:
-  update-ecs-task-definitions:
+  fetch_task_definitions:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
-
-      - name: Install AWS CLI
-        run: |
-          echo "Installing AWS CLI..."
-          sudo apt-get update
-          sudo apt-get install -y awscli
-          aws --version
-          if [ $? -ne 0 ]; then
-            echo "Error: AWS CLI installation failed"
-            exit 1
-          fi
-          echo "AWS CLI installed successfully"
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1.7.0
@@ -36,16 +30,17 @@ jobs:
           role-session-name: GitHub_to_AWS_via_FederatedOIDC
           aws-region: ${{ env.AWS_DEFAULT_REGION }}
 
-      - name: Fetch task definitions
+      - name: Fetch and filter task definitions
         run: |
           aws ecs list-task-definitions --query 'taskDefinitionArns[*]' --output text > all_task_definitions.txt
-          keywords=${{ github.event.inputs.filter_keywords }}
+          keywords="${{ github.event.inputs.filter_keywords }}"
           IFS=',' read -r -a keyword_array <<< "$keywords"
+          rm -f filtered_task_definitions.txt
           for keyword in "${keyword_array[@]}"; do
             grep "$keyword" all_task_definitions.txt >> filtered_task_definitions.txt
           done
 
-      - name: Upload task definitions
+      - name: Upload filtered task definitions
         uses: actions/upload-artifact@v2
         with:
           name: filtered-task-definitions
@@ -63,7 +58,7 @@ jobs:
           path: .
 
       - name: Set up AWS CLI
-        uses: aws-actions/configure-aws-credentials@v1
+        uses: aws-actions/configure-aws-credentials@v1.7.0
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -75,46 +70,32 @@ jobs:
 
           PATCHER_IMAGE="trendmicrocloudone/ecs-taskdef-patcher:2.3.44"  # Replace with the correct version
 
-          # Ensure required directories exist
           mkdir -p task_definitions container_definitions
 
-          # Iterate over each task definition ARN
           for arn in $(cat filtered_task_definitions.txt); do
-            # Fetch the current task definition JSON
+            task_def_name=$(basename $arn)
             aws ecs describe-task-definition --task-definition $arn > task_definitions/task_definition.json
 
             input_file="task_definitions/task_definition.json"
             output_file="container_definitions/task_definition.json"
 
-            # Print the JSON content before patching
             echo "Patching file: $input_file"
             cat "$input_file"
 
-            # Validate JSON file using jq
             if ! jq empty "$input_file"; then
               echo "Error: Invalid JSON in $input_file"
               exit 1
             fi
 
-            # Print the command to be run for debugging
             echo "Running Docker command to patch the file:"
-            echo "docker run --rm -v \"$(pwd)/task_definitions\":/mnt/input -v \"$(pwd)/container_definitions\":/mnt/output $PATCHER_IMAGE -i /mnt/input/task_definition.json -o /mnt/output/task_definition.json"
+            docker run --rm -v "$(pwd)/task_definitions":/mnt/input -v "$(pwd)/container_definitions":/mnt/output $PATCHER_IMAGE -i "/mnt/input/task_definition.json" -o "/mnt/output/task_definition.json"
 
-            # Run the Docker container to patch the task definition
-            docker run --rm \
-              -v "$(pwd)/task_definitions":/mnt/input \
-              -v "$(pwd)/container_definitions":/mnt/output \
-              $PATCHER_IMAGE \
-              -i "/mnt/input/task_definition.json" \
-              -o "/mnt/output/task_definition.json"
-
-            # Check if the output file was created
             if [ ! -f "$output_file" ]; then
               echo "Error: Output file $output_file was not created."
               exit 1
             fi
 
-            mv "$output_file" "patched_$arn.json"
+            mv "$output_file" "patched_${task_def_name}.json"
           done
 
       - name: Upload patched task definitions
@@ -135,7 +116,7 @@ jobs:
           path: .
 
       - name: Set up AWS CLI
-        uses: aws-actions/configure-aws-credentials@v1
+        uses: aws-actions/configure-aws-credentials@v1.7.0
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

@@ -1,7 +1,0 @@
-{
-    "taskDefinitionArns": [
-        "arn:aws:ecs:us-east-1:851725486855:task-definition/ecs-fargate-trend-demo-nginx:9",
-        "arn:aws:ecs:us-east-1:851725486855:task-definition/ecs-fargate-trend-demo-nginx:10",
-        "arn:aws:ecs:us-east-1:851725486855:task-definition/trendmicro-scout:8"
-    ]
-}

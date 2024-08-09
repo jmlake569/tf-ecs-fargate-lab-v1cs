@@ -1,0 +1,99 @@
+name: ECS Fargate Trend Inject
+
+on:
+  workflow_dispatch:
+    inputs:
+      filter_keywords:
+        description: "Comma-separated list of keywords to filter task definitions"
+        required: true
+        default: "keyword1,keyword2,keyword3"
+
+env:
+  AWS_DEFAULT_REGION: us-east-1
+
+permissions:
+  id-token: write   # This is required for requesting the JWT
+  contents: read    # This is required for actions/checkout
+
+jobs:
+  fetch_task_definitions:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1.7.0
+        with:
+          role-to-assume: ${{ secrets.AWS_GH_ROLE_ARN }}
+          role-session-name: GitHub_to_AWS_via_FederatedOIDC
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+
+      - name: Fetch task definitions
+        run: |
+          aws ecs list-task-definitions --query 'taskDefinitionArns[*]' --output text > all_task_definitions.txt
+          keywords=${{ github.event.inputs.filter_keywords }}
+          IFS=',' read -r -a keyword_array <<< "$keywords"
+          for keyword in "${keyword_array[@]}"; do
+            grep "$keyword" all_task_definitions.txt >> filtered_task_definitions.txt
+          done
+          
+      - name: Upload task definitions
+        uses: actions/upload-artifact@v2
+        with:
+          name: filtered-task-definitions
+          path: filtered_task_definitions.txt
+
+  patch_task_definitions:
+    runs-on: ubuntu-latest
+    needs: fetch_task_definitions
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Download task definitions
+        uses: actions/download-artifact@v2
+        with:
+          name: filtered-task-definitions
+
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2  # Replace with your desired AWS region
+
+      - name: Patch task definitions
+        run: |
+          for arn in $(cat filtered_task_definitions.txt); do
+            aws ecs describe-task-definition --task-definition $arn > task_definition.json
+            jq '.taskDefinition.containerDefinitions[0].environment += [{"name":"NEW_ENV_VAR","value":"value"}]' task_definition.json > patched_task_definition.json
+            mv patched_task_definition.json patched_$arn.json
+          done
+
+      - name: Upload patched task definitions
+        uses: actions/upload-artifact@v2
+        with:
+          name: patched-task-definitions
+          path: patched_*.json
+
+  register_task_definitions:
+    runs-on: ubuntu-latest
+    needs: patch_task_definitions
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Download patched task definitions
+        uses: actions/download-artifact@v2
+        with:
+          name: patched-task-definitions
+
+      - name: Register patched task definitions
+        run: |
+          for file in patched_*.json; do
+            aws ecs register-task-definition --cli-input-json file://$file
+          done

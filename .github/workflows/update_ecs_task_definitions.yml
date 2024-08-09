@@ -1,7 +1,12 @@
-name: Update ECS Task Definitions
+name: ECS Fargate Trend Inject
 
 on:
   workflow_dispatch:
+    inputs:
+      filter_keywords:
+        description: "Comma-separated list of keywords to filter task definitions"
+        required: true
+        default: "keyword1,keyword2,keyword3"
 
 env:
   AWS_DEFAULT_REGION: us-east-1
@@ -11,6 +16,37 @@ permissions:
   contents: read    # This is required for actions/checkout
 
 jobs:
+  fetch_task_definitions:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1.7.0
+        with:
+          role-to-assume: ${{ secrets.AWS_GH_ROLE_ARN }}
+          role-session-name: GitHub_to_AWS_via_FederatedOIDC
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+
+      - name: Fetch task definitions
+        run: |
+          aws ecs list-task-definitions > all_task_definitions.json
+          echo ${{ github.event.inputs.filter_keywords }} | tr ',' '\n' > keywords.txt
+
+      - name: Filter task definitions using jq
+        run: |
+          keywords=$(cat keywords.txt)
+          jq -r --arg keywords "$keywords" '
+            .taskDefinitionArns[] |
+            select(contains($keywords))' all_task_definitions.json > filtered_task_definitions.txt
+
+      - name: Print filtered task definitions
+        run: |
+          echo "Filtered Task Definitions:"
+          cat filtered_task_definitions.txt
+
   update-ecs-task-definitions:
     runs-on: ubuntu-latest
     steps:
@@ -35,31 +71,3 @@ jobs:
           role-to-assume: ${{ secrets.AWS_GH_ROLE_ARN }}
           role-session-name: GitHub_to_AWS_via_FederatedOIDC
           aws-region: ${{ env.AWS_DEFAULT_REGION }}
-
-      - name: Fetch current task definitions
-        run: |
-          aws ecs list-task-definitions --cli-input-json file://desired_task_definitions.txt > task_definitions_list.json
-
-      - name: Describe and patch task definitions
-        env:
-          AWS_REGION: us-east-1
-        run: |
-          while IFS= read -r TASK_DEF; do
-            echo "Describing task definition: $TASK_DEF"
-            aws ecs describe-task-definition --task-definition "$TASK_DEF" > current_task_definition.json
-            docker run -v $(pwd):/mnt/input \\\\
-                       -v $(pwd):/mnt/output \\\\
-                       trendmicrocloudone/ecs-taskdef-patcher:2.3.44 \\\\
-                       -i /mnt/input/current_task_definition.json \\\\
-                       -o /mnt/output/patched_task_definition.json
-            cp $(pwd)/patched_task_definition.json path/to/terraform/configuration/$(basename "$TASK_DEF").json
-          done < task_definitions_list.json
-
-      - name: Register new task definitions
-        env:
-          AWS_REGION: us-east-1
-        run: |
-          while IFS= read -r TASK_DEF; do
-            NEW_TASK_DEF=$(aws ecs register-task-definition --cli-input-json file://path/to/terraform/configuration/$(basename "$TASK_DEF").json)
-            echo "New task definition ARN: $NEW_TASK_DEF"
-          done < task_definitions_list.json

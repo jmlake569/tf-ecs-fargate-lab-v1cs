@@ -1,12 +1,7 @@
-name: ECS Fargate Trend Inject
+name: Update ECS Task Definitions
 
 on:
   workflow_dispatch:
-    inputs:
-      filter_keywords:
-        description: "Comma-separated list of keywords to filter task definitions"
-        required: true
-        default: "keyword1,keyword2,keyword3"
 
 env:
   AWS_DEFAULT_REGION: us-east-1
@@ -16,12 +11,23 @@ permissions:
   contents: read    # This is required for actions/checkout
 
 jobs:
-  fetch_task_definitions:
+  update-ecs-task-definitions:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
+
+      - name: Install AWS CLI
+        run: |
+          echo "Installing AWS CLI..."
+          sudo apt-get update
+          sudo apt-get install -y awscli
+          aws --version
+          if [ $? -ne 0 ]; then
+            echo "Error: AWS CLI installation failed"
+            exit 1
+          fi
+          echo "AWS CLI installed successfully"
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1.7.0

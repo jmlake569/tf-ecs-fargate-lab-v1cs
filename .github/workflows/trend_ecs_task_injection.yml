@@ -84,8 +84,10 @@ jobs:
               exit 1
             fi
 
-            # Ensure the 'family' field is retained in the patched file
-            jq --arg family "$family_name" '.family = $family' "$output_file" > "patched_${family_name}.json"
+            # Ensure the 'family' field is retained and the 'essential' field is set to true in the patched file
+            jq --arg family "$family_name" \
+               '.family = $family | .containerDefinitions[] |= (.essential = true)' \
+               "$output_file" > "patched_${family_name}.json"
           done
 
       - name: Register patched task definitions

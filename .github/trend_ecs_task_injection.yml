@@ -38,7 +38,7 @@ jobs:
           for keyword in "${keyword_array[@]}"; do
             grep "$keyword" all_task_definitions.txt >> filtered_task_definitions.txt
           done
-          
+
       - name: Upload task definitions
         uses: actions/upload-artifact@v2
         with:
@@ -50,13 +50,11 @@ jobs:
     needs: fetch_task_definitions
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
-
-      - name: Download task definitions
+      - name: Download filtered task definitions
         uses: actions/download-artifact@v2
         with:
           name: filtered-task-definitions
+          path: .
 
       - name: Set up AWS CLI
         uses: aws-actions/configure-aws-credentials@v1
@@ -67,10 +65,50 @@ jobs:
 
       - name: Patch task definitions
         run: |
+          set -e  # Exit immediately if a command exits with a non-zero status
+
+          PATCHER_IMAGE="trendmicrocloudone/ecs-taskdef-patcher:2.3.44"  # Replace with the correct version
+
+          # Ensure required directories exist
+          mkdir -p task_definitions container_definitions
+
+          # Iterate over each task definition ARN
           for arn in $(cat filtered_task_definitions.txt); do
-            aws ecs describe-task-definition --task-definition $arn > task_definition.json
-            jq '.taskDefinition.containerDefinitions[0].environment += [{"name":"NEW_ENV_VAR","value":"value"}]' task_definition.json > patched_task_definition.json
-            mv patched_task_definition.json patched_$arn.json
+            # Fetch the current task definition JSON
+            aws ecs describe-task-definition --task-definition $arn > task_definitions/task_definition.json
+
+            input_file="task_definitions/task_definition.json"
+            output_file="container_definitions/task_definition.json"
+
+            # Print the JSON content before patching
+            echo "Patching file: $input_file"
+            cat "$input_file"
+
+            # Validate JSON file using jq
+            if ! jq empty "$input_file"; then
+              echo "Error: Invalid JSON in $input_file"
+              exit 1
+            fi
+
+            # Print the command to be run for debugging
+            echo "Running Docker command to patch the file:"
+            echo "docker run --rm -v \"$(pwd)/task_definitions\":/mnt/input -v \"$(pwd)/container_definitions\":/mnt/output $PATCHER_IMAGE -i /mnt/input/task_definition.json -o /mnt/output/task_definition.json"
+
+            # Run the Docker container to patch the task definition
+            docker run --rm \
+              -v "$(pwd)/task_definitions":/mnt/input \
+              -v "$(pwd)/container_definitions":/mnt/output \
+              $PATCHER_IMAGE \
+              -i "/mnt/input/task_definition.json" \
+              -o "/mnt/output/task_definition.json"
+
+            # Check if the output file was created
+            if [ ! -f "$output_file" ]; then
+              echo "Error: Output file $output_file was not created."
+              exit 1
+            fi
+
+            mv "$output_file" "patched_$arn.json"
           done
 
       - name: Upload patched task definitions
@@ -84,13 +122,18 @@ jobs:
     needs: patch_task_definitions
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
-
       - name: Download patched task definitions
         uses: actions/download-artifact@v2
         with:
           name: patched-task-definitions
+          path: .
+
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2  # Replace with your desired AWS region
 
       - name: Register patched task definitions
         run: |

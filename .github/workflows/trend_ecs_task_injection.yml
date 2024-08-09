@@ -40,54 +40,53 @@ jobs:
             grep "$keyword" all_task_definitions.txt >> filtered_task_definitions.txt
           done
 
-      - name: Patch task definitions
-        run: |
-          set -e  # Exit immediately if a command exits with a non-zero status
-
-          PATCHER_IMAGE="trendmicrocloudone/ecs-taskdef-patcher:2.3.44"  # Replace with the correct version
-
-          # Ensure required directories exist
-          mkdir -p task_definitions container_definitions
-
-          # Iterate over each task definition ARN
-          for arn in $(cat filtered_task_definitions.txt); do
-            # Fetch the current task definition JSON
-            aws ecs describe-task-definition --task-definition $arn > task_definitions/task_definition.json
-
-            # Get the family name from the task definition for naming the output file
-            family_name=$(jq -r '.taskDefinition.family' task_definitions/task_definition.json)
-
-            input_file="task_definitions/task_definition.json"
-            output_file="container_definitions/task_definition.json"
-
-            # Print the JSON content before patching
-            echo "Patching file: $input_file"
-            cat "$input_file"
-
-            # Validate JSON file using jq
-            if ! jq empty "$input_file"; then
-              echo "Error: Invalid JSON in $input_file"
-              exit 1
-            fi
-
-            # Print the command to be run for debugging
-            echo "Running Docker command to patch the file:"
-            docker run --rm \
-              -v "$(pwd)/task_definitions":/mnt/input \
-              -v "$(pwd)/container_definitions":/mnt/output \
-              $PATCHER_IMAGE \
-              -i "/mnt/input/task_definition.json" \
-              -o "/mnt/output/task_definition.json"
-
-            # Check if the output file was created
-            if [ ! -f "$output_file" ]; then
-              echo "Error: Output file $output_file was not created."
-              exit 1
-            fi
-
-            # Move the output file to a new file named based on the family name
-            mv "$output_file" "patched_${family_name}.json"
-          done
+          - name: Patch task definitions
+          run: |
+            set -e  # Exit immediately if a command exits with a non-zero status
+  
+            PATCHER_IMAGE="trendmicrocloudone/ecs-taskdef-patcher:2.3.44"  # Replace with the correct version
+  
+            # Ensure required directories exist
+            mkdir -p task_definitions container_definitions
+  
+            # Iterate over each task definition ARN
+            for arn in $(cat filtered_task_definitions.txt); do
+              # Fetch the current task definition JSON
+              aws ecs describe-task-definition --task-definition $arn > task_definitions/task_definition.json
+  
+              # Get the family name from the task definition for naming the output file
+              family_name=$(jq -r '.taskDefinition.family' task_definitions/task_definition.json)
+  
+              input_file="task_definitions/task_definition.json"
+              output_file="container_definitions/task_definition.json"
+  
+              # Print the JSON content before patching
+              echo "Patching file: $input_file"
+              cat "$input_file"
+  
+              # Validate JSON file using jq
+              if ! jq empty "$input_file"; then
+                echo "Error: Invalid JSON in $input_file"
+                exit 1
+              fi
+  
+              # Run the Docker container to patch the task definition
+              docker run --rm \
+                -v "$(pwd)/task_definitions":/mnt/input \
+                -v "$(pwd)/container_definitions":/mnt/output \
+                $PATCHER_IMAGE \
+                -i "/mnt/input/task_definition.json" \
+                -o "/mnt/output/task_definition.json"
+  
+              # Check if the output file was created
+              if [ ! -f "$output_file" ]; then
+                echo "Error: Output file $output_file was not created."
+                exit 1
+              fi
+  
+              # Ensure the 'family' field is retained in the patched file
+              jq --arg family "$family_name" '.family = $family' "$output_file" > "patched_${family_name}.json"
+            done  
 
       - name: Register patched task definitions
         run: |
